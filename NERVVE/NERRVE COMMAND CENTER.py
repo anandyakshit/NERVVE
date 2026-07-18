@@ -1,33 +1,129 @@
 import customtkinter as ctk
 import serial
+import time
+from serial.tools import list_ports
 import threading
 from datetime import datetime
+import webbrowser
 
 #variables(probably_global)
 packet_count = 0
 cntn = ""
+ser = None
+alerts = []
+current_lat = ""
+current_lon = ""
+running = True
+
+#appearence
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+app = ctk.CTk()
+app.title("NERVVE Command Centre")
+app.geometry("1200x700")
+
+#Main_Area
+main = ctk.CTkFrame(app)
+main.pack(fill="both", expand=True, padx=10, pady=10)
+main.grid_columnconfigure(0,weight=1)
+main.grid_columnconfigure(1,weight=3)
+main.grid_columnconfigure(2,weight=2)
+main.grid_rowconfigure(0,weight=1)
+
+#location_opener
+def open_location(lat, lon):
+    url = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=16/{lat}/{lon}"
+    webbrowser.open(url)
+
+#destry_threads
+def on_closing():
+    global running
+    global ser
+    print("shutting down...")
+    running = False
+    try:
+        if ser is not None:
+            ser.close()
+    except:
+            pass
+    app.destroy()    
+
+#connection_manager
+def find_arduino():
+
+    ports = list_ports.comports()
+
+    print("\n Available ports:")
+
+    for port in ports:
+
+        print(
+            port.device,"|",
+            port.description
+        )
+
+        try:
+
+            s = serial.Serial(
+                port.device,
+                9600,
+                timeout=1
+            )
+
+            print("Connected to", port.device)
+
+            return s
+
+        except Exception as e:
+
+            print(
+                "Failed:",
+                port.device,
+                e
+            )
+
+    return None
+
+def connection_manager():
+    global ser
+    while running:
+        print("Connection Manager running...")
+        if ser is None:
+            print("Searching for Arduino...")
+            try:
+                ser = find_arduino()
+                if ser:
+                    print("Arduino Connected")
+                    app.after(0,lambda: connection_status.configure(text="Connected"))
+            except:
+                pass
+        time.sleep(2)
+                
+                                             
 #serial_data_reader
-ser = serial.Serial("COM3",9600)
 def serial_listener():
-    
-    while True:
+    global ser
+    while running:
+        if ser is None:
+            time.sleep(1)
+            continue
         
         try:
-            packet = ser.readline().decode("utf-8", errors="ignore").strip()
-            
+            packet = ser.readline().decode("utf-8",errors="ignore").strip()
             if packet:
-                print(packet)
                 result = parse_packet(packet)
-                global cntn
-                cntn = "Connected"
-                
                 if result:
                     msg, lat, lon = result
-                    app.after(0,lambda:update_dashboard(msg,lat,lon))
-            else:
-                cntn = "Disconnected"
+                    app.after(0,lambda:update_dashboard(msg, lat, lon))
         except Exception as e:
-            print(e)
+            print("Arduino Disconnected")
+            try:
+                ser.close()
+            except:
+                pass
+            ser = None
+            app.after(0,lambda:connection_status.configure(text="Disconnected"))
+            
             
 #serial_data_parser
 def parse_packet(packet):
@@ -36,6 +132,8 @@ def parse_packet(packet):
          msg = parts[0].replace("SOS:","").strip()
          lat = parts[1].replace("LAT:","").strip()
          lon = parts[2].replace("LONG:","").strip()
+         if not msg:
+             msg = "No message provided"
          return msg, lat, lon
         
     except Exception as e:
@@ -44,32 +142,39 @@ def parse_packet(packet):
 
 #dashboard_updater
 def update_dashboard(msg, lat, lon):
-
-    #alert_history_updater
-    timestamp= datetime.now().strftime("%H:%M:%S")
-    history_entry = (f"[{timestamp}]" ,f"[{msg}]\n")
-    history_box.insert("end", history_entry)
-    history_box.see("end")
-
+    
     #packet_counter
     global packet_count
     packet_count += 1
+    print(packet_count)
+    pkt_count_label.configure(text=str(packet_count))   
     
+    #alert_history_updater
+    global current_lat
+    global current_lon
+    current_lat = lat
+    current_lon = lon
+    timestamp= datetime.now().strftime("%H:%M:%S")
+    alerts.append({
+    "timestamp": timestamp,
+    "message": msg,
+    "lat": lat,
+    "lon": lon
+    })
+
+    add_alert_card(
+    timestamp,
+    msg,
+    lat,
+    lon
+    )
+
     
     #main_update
     priority_label.configure(text="Priority: High")
     message_box.delete('1.0','end')
     message_box.insert('1.0', msg)
     location_label.configure(text=f"Latitude: {lat}\nLongitude: {lon}")
-
-            
-#appearence
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
-
-app = ctk.CTk()
-app.title("NERVVE Command Centre")
-app.geometry("1200x700")
 
 #header
 
@@ -82,30 +187,30 @@ title.pack(side="left", padx=20, pady=20)
 status = ctk.CTkLabel(header, text="🟢 ONLINE", font=("Arial", 18, "bold"))
 status.pack(side="right", padx=20)
 
-#Maine_Area
-
-main = ctk.CTkFrame(app)
-main.pack(fill="both", expand=True, padx=10, pady=10)
-
 #left_panel
 
-left_panel = ctk.CTkFrame(main, width=250)
-left_panel.pack(side="left",fill="y", padx=10, pady=10)
+left_panel = ctk.CTkFrame(main, width=220)
+left_panel.grid(row=0, column=0,sticky="nsew",padx=10,pady=10)
 
 ctk.CTkLabel(left_panel,text="SYSTEM STATUS",font=("Arial", 20, "bold")).pack(padx=20,pady=20)
 
 ctk.CTkLabel(left_panel,text="Receiver Status:").pack(pady=10)
-ctk.CTkLabel(left_panel,text=cntn).pack(pady=5)
+connection_status = ctk.CTkLabel(left_panel,text=cntn)
+connection_status.pack(pady=5)
 
 
-ctk.CTkLabel(left_panel,text="Packets Recieved:").pack(pady=10)
-ctk.CTkLabel(left_panel,text="0").pack(pady=5)
+ctk.CTkLabel(left_panel,text="Total Alerts Recieved:", font=("Arial",15,"bold")).pack(pady=100)
+pkt_count_label = ctk.CTkLabel(left_panel,text="0", font=("Arial",26,"bold"))
+pkt_count_label.pack()
+left_panel.pack_propagate(False)
+
 
 
 #center_panel
 
-center_panel = ctk.CTkFrame(main)
-center_panel.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+center_panel = ctk.CTkFrame(main, width=1200)
+center_panel.grid(row=0, column=1,sticky="nsew",padx=10,pady=10)
+
 
 ctk.CTkLabel(center_panel,text="ACTIVE ALERT",font=("Arial", 24, "bold")).pack(pady=20)
 
@@ -119,19 +224,82 @@ message_box.insert("1.0","Waiting for incoming packets...")
 location_label = ctk.CTkLabel(center_panel,text="Latitude: --\nLongitude: --",font=("Arial", 18))
 location_label.pack(pady=20)
 
-open_map = ctk.CTkButton(center_panel,text="Open Location")
+
+#location_opener
+def open_current_location():
+
+    if current_lat and current_lon:
+
+        open_location(
+            current_lat,
+            current_lon
+        )
+
+open_map = ctk.CTkButton(
+    center_panel,
+    text="📍 Open Current Location",
+    command=open_current_location
+)
+
 open_map.pack(pady=20)
+center_panel.pack_propagate(False)
 
-# RIGHT PANEL
+#right_panel
 
-right_panel = ctk.CTkFrame(main, width=300)
-right_panel.pack(side="right", fill="y", padx=10, pady=10)
+right_panel = ctk.CTkFrame(main, width=800)
+right_panel.grid(row=0, column=2,sticky="nsew",padx=10,pady=10)
+
 
 ctk.CTkLabel(right_panel,text="ALERT HISTORY",font=("Arial", 20, "bold")).pack(pady=20)
 
-history_box = ctk.CTkTextbox(right_panel)
+history_box = ctk.CTkScrollableFrame(right_panel)
 history_box.pack(fill="both",expand=True,padx=10,pady=10)
 
-history_box.insert("1.0","No alerts received.")
+
+right_panel.pack_propagate(False)
+
+#history_alert_card
+def add_alert_card(timestamp, msg, lat, lon):
+
+    card = ctk.CTkFrame(history_box)
+
+    card.pack(
+        fill="x",
+        padx=5,
+        pady=5
+    )
+
+    ctk.CTkLabel(
+        card,
+        text=f"🚨 {timestamp}",
+        font=("Arial", 14, "bold")
+    ).pack(anchor="w", padx=10, pady=(10, 0))
+
+    ctk.CTkLabel(
+        card,
+        text=f"💬 {msg}",
+        wraplength=300,
+        justify="left"
+    ).pack(anchor="w", padx=10)
+
+    ctk.CTkLabel(
+        card,
+        text=f"📍 {lat}, {lon}"
+    ).pack(anchor="w", padx=10)
+
+    ctk.CTkButton(
+        card,
+        text="Open Location",
+        command=lambda: open_location(lat, lon)
+    ).pack(
+        anchor="e",
+        padx=10,
+        pady=10
+    )
+
+
+#main_processes
+threading.Thread(target=connection_manager,daemon=True).start()
 threading.Thread(target=serial_listener, daemon=True).start()
+app.protocol("WM_DELETE_WINDOW",on_closing)
 app.mainloop()
