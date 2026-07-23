@@ -5,6 +5,7 @@ from serial.tools import list_ports
 import threading
 from datetime import datetime
 import webbrowser
+import pywinstyles
 
 #variables(probably_global)
 packet_count = 0
@@ -17,14 +18,14 @@ running = True
 
 #appearence
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("green")
 app = ctk.CTk()
 app.title("NERVVE Command Centre")
 app.geometry("1200x700")
 
 #Main_Area
 main = ctk.CTkFrame(app)
-main.pack(fill="both", expand=True, padx=10, pady=10)
+main.pack(fill="both", expand=True)
 main.grid_columnconfigure(0,weight=1)
 main.grid_columnconfigure(1,weight=3)
 main.grid_columnconfigure(2,weight=2)
@@ -95,6 +96,7 @@ def connection_manager():
                 if ser:
                     print("Arduino Connected")
                     app.after(0,lambda: connection_status.configure(text="Connected"))
+                    app.after(0,lambda: left_panel.configure(fg_color="green"))
             except:
                 pass
         time.sleep(2)
@@ -123,6 +125,7 @@ def serial_listener():
                 pass
             ser = None
             app.after(0,lambda:connection_status.configure(text="Disconnected"))
+            app.after(0,lambda:left_panel.configure(fg_color="red"))
             
             
 #serial_data_parser
@@ -176,23 +179,21 @@ def update_dashboard(msg, lat, lon):
     message_box.insert('1.0', msg)
     location_label.configure(text=f"Latitude: {lat}\nLongitude: {lon}")
 
-#header
-
-header = ctk.CTkFrame(app, height=80)
-header.pack(fill="x", padx=10, pady=10)
-
-title = ctk.CTkLabel(header, text="NERVVE COMMAND CENTRE", font=("Arial", 28, "bold"))
+#footer
+footer = ctk.CTkFrame(app, height=80,fg_color="black")
+footer.pack(fill="x", padx=10, pady=10)
+title = ctk.CTkLabel(footer, text="NERVVE COMMAND CENTRE", font=("Arial", 28, "bold"))
 title.pack(side="left", padx=20, pady=20)
+online = ctk.CTkLabel(footer, text="Beacon Online",font=("Comic Sans",18,"bold"))
+online.pack(side="right",padx=20,pady=20)
 
-status = ctk.CTkLabel(header, text="🟢 ONLINE", font=("Arial", 18, "bold"))
-status.pack(side="right", padx=20)
 
 #left_panel
 
-left_panel = ctk.CTkFrame(main, width=220)
+left_panel = ctk.CTkFrame(main, width=220,fg_color="red")
 left_panel.grid(row=0, column=0,sticky="nsew",padx=10,pady=10)
 
-ctk.CTkLabel(left_panel,text="SYSTEM STATUS",font=("Arial", 20, "bold")).pack(padx=20,pady=20)
+ctk.CTkLabel(left_panel,text="SYSTEM STATUS",font=("", 20, "bold")).pack(padx=20,pady=20)
 
 ctk.CTkLabel(left_panel,text="Receiver Status:").pack(pady=10)
 connection_status = ctk.CTkLabel(left_panel,text=cntn)
@@ -208,7 +209,7 @@ left_panel.pack_propagate(False)
 
 #center_panel
 
-center_panel = ctk.CTkFrame(main, width=1200)
+center_panel = ctk.CTkFrame(main, width=1200,fg_color="orange")
 center_panel.grid(row=0, column=1,sticky="nsew",padx=10,pady=10)
 
 
@@ -238,7 +239,8 @@ def open_current_location():
 open_map = ctk.CTkButton(
     center_panel,
     text="📍 Open Current Location",
-    command=open_current_location
+    command=open_current_location,
+    fg_color="dark green"
 )
 
 open_map.pack(pady=20)
@@ -246,7 +248,7 @@ center_panel.pack_propagate(False)
 
 #right_panel
 
-right_panel = ctk.CTkFrame(main, width=800)
+right_panel = ctk.CTkFrame(main, width=800,fg_color="orange")
 right_panel.grid(row=0, column=2,sticky="nsew",padx=10,pady=10)
 
 
